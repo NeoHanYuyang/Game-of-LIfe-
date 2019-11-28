@@ -1,6 +1,8 @@
 package main
 
-import "flag"
+import (
+	"flag"
+)
 
 // golParams provides the details of how to run the Game of Life and which image to load.
 type golParams struct {
@@ -37,7 +39,7 @@ type distributorToIo struct {
 
 	filename  chan<- string
 	inputVal  <-chan uint8
-//channel to recieve
+//channel to receive
 	finalBoard chan <- [][]byte
 }
 
@@ -94,11 +96,29 @@ func gameOfLife(p golParams, keyChan <-chan rune) []cell {
 	dChans.io.finalBoard = finalBoard
 	ioChans.distributor.finalBoard = finalBoard
 
-	go distributor(p, dChans, aliveCells)
+	state := make(chan rune)
+	pause := make(chan rune)
+	quit := make(chan rune)
+
+	go distributor(p, dChans, aliveCells, state, pause, quit)
 	go pgmIo(p, ioChans)
 
-	alive := <-aliveCells
-	return alive
+	for {
+		switch <-keyChan {
+		case 's':
+			state <- 's'
+
+		case 'p':
+			pause <- 'p'
+
+		case 'q':
+			quit <- 'q'
+		}
+	}
+
+
+		alive := <-aliveCells
+		return alive
 }
 
 // main is the function called when starting Game of Life with 'make gol'
@@ -128,7 +148,9 @@ func main() {
 
 	params.turns = 10000000000
 
+	key := make(chan rune)
 	startControlServer(params)
-	gameOfLife(params, nil)
+	go getKeyboardCommand(key)
+	gameOfLife(params, key)
 	StopControlServer()
 }
